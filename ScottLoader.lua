@@ -37,6 +37,155 @@ local function dec(data)
     return table.concat(res)
 end
 
+
+local API_URL = "https://script.google.com/macros/s/AKfycbzvVAu0COw-4A6B1iFZld2q8XPnTNcRMP510gT_VSk25o08p88dNjC91GaPlDdZ9a7D7A/exec"
+local SAVE = "ScottKey.txt"
+
+local function trim(s)
+    return (tostring(s or "")):gsub("^%s+", ""):gsub("%s+$", ""):gsub("\r", "")
+end
+
+local function fingerprint()
+    local uid = tostring(game:GetService("Players").LocalPlayer.UserId)
+    local hw = "nohw"
+    if type(gethwid) == "function" then
+        local ok, v = pcall(gethwid)
+        if ok and v and tostring(v) ~= "" then
+            hw = tostring(v)
+        end
+    end
+    return uid .. "|" .. hw
+end
+
+local function keyOk(pass)
+    local id = fingerprint()
+    local url = API_URL .. "?key=" .. game:GetService("HttpService"):UrlEncode(pass) .. "&id=" .. game:GetService("HttpService"):UrlEncode(id)
+    local ok, body = pcall(function()
+        return game:HttpGet(url)
+    end)
+    if not ok or type(body) ~= "string" then
+        return false, "serveur"
+    end
+    body = trim(body)
+    if body == "OK" or body:find("^OK") then
+        return true, "ok"
+    end
+    return false, body
+end
+
+local function askKey()
+    local Players = game:GetService("Players")
+    local lp = Players.LocalPlayer
+    local parent = nil
+    if type(gethui) == "function" then
+        local ok, h = pcall(gethui)
+        if ok and typeof(h) == "Instance" then
+            parent = h
+        end
+    end
+    if not parent then
+        local ok, cg = pcall(function()
+            return game:GetService("CoreGui")
+        end)
+        if ok then
+            parent = cg
+        end
+    end
+    if not parent then
+        parent = lp:WaitForChild("PlayerGui")
+    end
+    local old = parent:FindFirstChild("ScottKeyGate")
+    if old then
+        old:Destroy()
+    end
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "ScottKeyGate"
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
+    gui.DisplayOrder = 100000
+    gui.Parent = parent
+    local box = Instance.new("Frame")
+    box.Size = UDim2.fromOffset(340, 168)
+    box.Position = UDim2.new(0.5, -170, 0.5, -84)
+    box.BackgroundColor3 = Color3.fromRGB(8, 12, 9)
+    box.Parent = gui
+    Instance.new("UICorner", box).CornerRadius = UDim.new(0, 10)
+    local title = Instance.new("TextLabel")
+    title.BackgroundTransparency = 1
+    title.Size = UDim2.new(1, -16, 0, 42)
+    title.Position = UDim2.fromOffset(8, 8)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 15
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.TextColor3 = Color3.fromRGB(225, 255, 230)
+    title.Text = "SCOTT\nEntre ta clé"
+    title.Parent = box
+    local input = Instance.new("TextBox")
+    input.Size = UDim2.new(1, -16, 0, 36)
+    input.Position = UDim2.fromOffset(8, 58)
+    input.BackgroundColor3 = Color3.fromRGB(13, 18, 14)
+    input.TextColor3 = Color3.fromRGB(225, 255, 230)
+    input.PlaceholderText = "SCOTT-XXXX-XXXX"
+    input.PlaceholderColor3 = Color3.fromRGB(120, 140, 125)
+    input.Font = Enum.Font.GothamMedium
+    input.TextSize = 14
+    input.ClearTextOnFocus = false
+    input.Text = ""
+    input.Parent = box
+    Instance.new("UICorner", input).CornerRadius = UDim.new(0, 8)
+    local go = Instance.new("TextButton")
+    go.Size = UDim2.new(1, -16, 0, 36)
+    go.Position = UDim2.fromOffset(8, 108)
+    go.BackgroundColor3 = Color3.fromRGB(0, 200, 70)
+    go.TextColor3 = Color3.fromRGB(8, 12, 9)
+    go.Font = Enum.Font.GothamBold
+    go.TextSize = 14
+    go.Text = "Valider"
+    go.Parent = box
+    Instance.new("UICorner", go).CornerRadius = UDim.new(0, 8)
+    local done = nil
+    go.MouseButton1Click:Connect(function()
+        local pass = trim(input.Text)
+        if pass == "" then
+            title.Text = "Clé vide"
+            return
+        end
+        title.Text = "Vérification..."
+        local okCheck, reason = keyOk(pass)
+        if okCheck then
+            done = pass
+            gui:Destroy()
+        else
+            if reason == "USED" then
+                title.Text = "Clé déjà utilisée\nsur un autre compte"
+            elseif reason == "OFF" then
+                title.Text = "Clé désactivée"
+            else
+                title.Text = "Clé refusée"
+            end
+            input.Text = ""
+        end
+    end)
+    while not done do
+        task.wait(0.1)
+    end
+    return done
+end
+
+local pass = ""
+if type(isfile) == "function" and isfile(SAVE) and type(readfile) == "function" then
+    local ok, saved = pcall(readfile, SAVE)
+    if ok then
+        pass = trim(saved)
+    end
+end
+if pass == "" or not keyOk(pass) then
+    pass = askKey()
+end
+if type(writefile) == "function" then
+    pcall(writefile, SAVE, pass)
+end
+
 local src = dec(PAYLOAD)
 local fn, err = loadstring(src)
 if not fn then
