@@ -46,15 +46,7 @@ local function trim(s)
 end
 
 local function fingerprint()
-    local uid = tostring(game:GetService("Players").LocalPlayer.UserId)
-    local hw = "nohw"
-    if type(gethwid) == "function" then
-        local ok, v = pcall(gethwid)
-        if ok and v and tostring(v) ~= "" then
-            hw = tostring(v)
-        end
-    end
-    return uid .. "|" .. hw
+    return tostring(game:GetService("Players").LocalPlayer.UserId)
 end
 
 local function keyOk(pass)
