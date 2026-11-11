@@ -38,39 +38,40 @@ local function dec(data)
 end
 
 
-local API_URL = "https://script.google.com/macros/s/AKfycbzvVAu0COw-4A6B1iFZld2q8XPnTNcRMP510gT_VSk25o08p88dNjC91GaPlDdZ9a7D7A/exec"
+local KEYS_URL = "https://raw.githubusercontent.com/compteytb89100-source/script/main/keys.txt"
 local SAVE = "ScottKey.txt"
 
 local function trim(s)
     return (tostring(s or "")):gsub("^%s+", ""):gsub("%s+$", ""):gsub("\r", "")
 end
 
-local function fingerprint()
-    local uid = tostring(game:GetService("Players").LocalPlayer.UserId)
-    local hw = "nohw"
-    if type(gethwid) == "function" then
-        local ok, v = pcall(gethwid)
-        if ok and v and tostring(v) ~= "" then
-            hw = tostring(v)
-        end
-    end
-    return uid .. "|" .. hw
+local function myId()
+    return tostring(game:GetService("Players").LocalPlayer.UserId)
 end
 
 local function keyOk(pass)
-    local id = fingerprint()
-    local url = API_URL .. "?key=" .. game:GetService("HttpService"):UrlEncode(pass) .. "&id=" .. game:GetService("HttpService"):UrlEncode(id)
     local ok, body = pcall(function()
-        return game:HttpGet(url)
+        return game:HttpGet(KEYS_URL)
     end)
-    if not ok or type(body) ~= "string" then
-        return false, "serveur"
+    if not ok or type(body) ~= "string" or body:find("404") then
+        return false, "LISTE"
     end
-    body = trim(body)
-    if body == "OK" or body:find("^OK") then
-        return true, "ok"
+    local uid = myId()
+    for line in body:gmatch("[^\r\n]+") do
+        local raw = trim(line)
+        if raw ~= "" and raw:sub(1, 1) ~= "#" then
+            local key, lock = raw:match("^([^|]+)|?(.*)$")
+            key = trim(key)
+            lock = trim(lock)
+            if key == pass then
+                if lock == "" or lock == uid then
+                    return true, "ok"
+                end
+                return false, "USED"
+            end
+        end
     end
-    return false, body
+    return false, "NO"
 end
 
 local function askKey()
@@ -105,24 +106,24 @@ local function askKey()
     gui.DisplayOrder = 100000
     gui.Parent = parent
     local box = Instance.new("Frame")
-    box.Size = UDim2.fromOffset(340, 168)
-    box.Position = UDim2.new(0.5, -170, 0.5, -84)
+    box.Size = UDim2.fromOffset(340, 190)
+    box.Position = UDim2.new(0.5, -170, 0.5, -95)
     box.BackgroundColor3 = Color3.fromRGB(8, 12, 9)
     box.Parent = gui
     Instance.new("UICorner", box).CornerRadius = UDim.new(0, 10)
     local title = Instance.new("TextLabel")
     title.BackgroundTransparency = 1
-    title.Size = UDim2.new(1, -16, 0, 42)
+    title.Size = UDim2.new(1, -16, 0, 52)
     title.Position = UDim2.fromOffset(8, 8)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 15
     title.TextXAlignment = Enum.TextXAlignment.Left
     title.TextColor3 = Color3.fromRGB(225, 255, 230)
-    title.Text = "SCOTT\nEntre ta clé"
+    title.Text = "SCOTT\nID " .. myId() .. "  -  entre ta clé"
     title.Parent = box
     local input = Instance.new("TextBox")
     input.Size = UDim2.new(1, -16, 0, 36)
-    input.Position = UDim2.fromOffset(8, 58)
+    input.Position = UDim2.fromOffset(8, 70)
     input.BackgroundColor3 = Color3.fromRGB(13, 18, 14)
     input.TextColor3 = Color3.fromRGB(225, 255, 230)
     input.PlaceholderText = "SCOTT-XXXX-XXXX"
@@ -135,7 +136,7 @@ local function askKey()
     Instance.new("UICorner", input).CornerRadius = UDim.new(0, 8)
     local go = Instance.new("TextButton")
     go.Size = UDim2.new(1, -16, 0, 36)
-    go.Position = UDim2.fromOffset(8, 108)
+    go.Position = UDim2.fromOffset(8, 122)
     go.BackgroundColor3 = Color3.fromRGB(0, 200, 70)
     go.TextColor3 = Color3.fromRGB(8, 12, 9)
     go.Font = Enum.Font.GothamBold
@@ -157,13 +158,12 @@ local function askKey()
             gui:Destroy()
         else
             if reason == "USED" then
-                title.Text = "Clé déjà utilisée\nsur un autre compte"
-            elseif reason == "OFF" then
-                title.Text = "Clé désactivée"
+                title.Text = "Clé déjà prise\npar un autre compte"
+            elseif reason == "LISTE" then
+                title.Text = "keys.txt introuvable\nsur GitHub"
             else
                 title.Text = "Clé refusée"
             end
-            input.Text = ""
         end
     end)
     while not done do
