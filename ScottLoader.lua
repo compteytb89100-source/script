@@ -50,47 +50,78 @@ local function myId()
 end
 
 local function grab(url)
+    local function clean(s)
+        if type(s) ~= "string" then
+            return nil
+        end
+        s = trim(s)
+        if s == "" or s:find("<html", 1, true) or s:find("<!DOCTYPE", 1, true) then
+            return nil
+        end
+        return s
+    end
+    local ok, body = pcall(function()
+        return game:HttpGet(url)
+    end)
+    body = ok and clean(body)
+    if body then
+        return body
+    end
     local req = request or http_request or (syn and syn.request)
     if type(req) == "function" then
-        local ok, res = pcall(req, { Url = url, Method = "GET" })
-        if ok and type(res) == "table" then
-            local body = res.Body
-            if type(body) == "string" and body ~= "" and not body:find("<html") then
+        local ok2, res = pcall(req, { Url = url, Method = "GET" })
+        if ok2 and type(res) == "table" then
+            body = clean(res.Body)
+            if body then
                 return body
             end
             local headers = res.Headers or res.headers or {}
             local loc = headers.Location or headers.location
             if type(loc) == "string" and loc ~= "" then
-                local ok2, res2 = pcall(req, { Url = loc, Method = "GET" })
-                if ok2 and type(res2) == "table" and type(res2.Body) == "string" then
-                    return res2.Body
+                local ok3, body2 = pcall(function()
+                    return game:HttpGet(loc)
+                end)
+                body2 = ok3 and clean(body2)
+                if body2 then
+                    return body2
                 end
             end
         end
     end
-    return game:HttpGet(url)
+    if not ok then
+        error(tostring(body))
+    end
+    return ""
 end
 
 local function keyOk(pass)
     local url = API_URL .. "?key=" .. game:GetService("HttpService"):UrlEncode(pass) .. "&id=" .. game:GetService("HttpService"):UrlEncode(myId())
-    local ok, body = pcall(grab, url)
-    if not ok or type(body) ~= "string" then
-        return false, "SERVEUR"
+    local last = "SERVEUR"
+    for _ = 1, 3 do
+        local ok, body = pcall(grab, url)
+        if ok and type(body) == "string" then
+            body = trim(body)
+            if body == "OK" or body:find("OK") then
+                return true, "OK"
+            end
+            if body:find("USED") then
+                return false, "USED"
+            end
+            if body:find("OFF") then
+                return false, "OFF"
+            end
+            if body:find("NO") then
+                return false, "NO"
+            end
+            if body ~= "" then
+                last = body:sub(1, 24)
+            end
+        else
+            last = "SERVEUR"
+        end
+        task.wait(0.6)
     end
-    body = trim(body)
-    if body == "OK" or body:find("^OK") or body:find("\nOK") then
-        return true, "OK"
-    end
-    if body:find("USED") then
-        return false, "USED"
-    end
-    if body:find("OFF") then
-        return false, "OFF"
-    end
-    if body:find("NO") then
-        return false, "NO"
-    end
-    return false, body:sub(1, 24)
+    return false, last
 end
 
 local function askKey()
