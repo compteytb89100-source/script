@@ -45,24 +45,52 @@ local function trim(s)
     return (tostring(s or "")):gsub("^%s+", ""):gsub("%s+$", ""):gsub("\r", "")
 end
 
-local function fingerprint()
+local function myId()
     return tostring(game:GetService("Players").LocalPlayer.UserId)
 end
 
+local function grab(url)
+    local req = request or http_request or (syn and syn.request)
+    if type(req) == "function" then
+        local ok, res = pcall(req, { Url = url, Method = "GET" })
+        if ok and type(res) == "table" then
+            local body = res.Body
+            if type(body) == "string" and body ~= "" and not body:find("<html") then
+                return body
+            end
+            local headers = res.Headers or res.headers or {}
+            local loc = headers.Location or headers.location
+            if type(loc) == "string" and loc ~= "" then
+                local ok2, res2 = pcall(req, { Url = loc, Method = "GET" })
+                if ok2 and type(res2) == "table" and type(res2.Body) == "string" then
+                    return res2.Body
+                end
+            end
+        end
+    end
+    return game:HttpGet(url)
+end
+
 local function keyOk(pass)
-    local id = fingerprint()
-    local url = API_URL .. "?key=" .. game:GetService("HttpService"):UrlEncode(pass) .. "&id=" .. game:GetService("HttpService"):UrlEncode(id)
-    local ok, body = pcall(function()
-        return game:HttpGet(url)
-    end)
+    local url = API_URL .. "?key=" .. game:GetService("HttpService"):UrlEncode(pass) .. "&id=" .. game:GetService("HttpService"):UrlEncode(myId())
+    local ok, body = pcall(grab, url)
     if not ok or type(body) ~= "string" then
-        return false, "serveur"
+        return false, "SERVEUR"
     end
     body = trim(body)
-    if body == "OK" or body:find("^OK") then
-        return true, "ok"
+    if body == "OK" or body:find("^OK") or body:find("\nOK") then
+        return true, "OK"
     end
-    return false, body
+    if body:find("USED") then
+        return false, "USED"
+    end
+    if body:find("OFF") then
+        return false, "OFF"
+    end
+    if body:find("NO") then
+        return false, "NO"
+    end
+    return false, body:sub(1, 24)
 end
 
 local function askKey()
@@ -97,27 +125,27 @@ local function askKey()
     gui.DisplayOrder = 100000
     gui.Parent = parent
     local box = Instance.new("Frame")
-    box.Size = UDim2.fromOffset(340, 168)
-    box.Position = UDim2.new(0.5, -170, 0.5, -84)
+    box.Size = UDim2.fromOffset(340, 190)
+    box.Position = UDim2.new(0.5, -170, 0.5, -95)
     box.BackgroundColor3 = Color3.fromRGB(8, 12, 9)
     box.Parent = gui
     Instance.new("UICorner", box).CornerRadius = UDim.new(0, 10)
     local title = Instance.new("TextLabel")
     title.BackgroundTransparency = 1
-    title.Size = UDim2.new(1, -16, 0, 42)
+    title.Size = UDim2.new(1, -16, 0, 52)
     title.Position = UDim2.fromOffset(8, 8)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 15
     title.TextXAlignment = Enum.TextXAlignment.Left
     title.TextColor3 = Color3.fromRGB(225, 255, 230)
-    title.Text = "SCOTT\nEntre ta clé"
+    title.Text = "SCOTT\nID " .. myId()
     title.Parent = box
     local input = Instance.new("TextBox")
     input.Size = UDim2.new(1, -16, 0, 36)
-    input.Position = UDim2.fromOffset(8, 58)
+    input.Position = UDim2.fromOffset(8, 70)
     input.BackgroundColor3 = Color3.fromRGB(13, 18, 14)
     input.TextColor3 = Color3.fromRGB(225, 255, 230)
-    input.PlaceholderText = "SCOTT-XXXX-XXXX"
+    input.PlaceholderText = "ta clé"
     input.PlaceholderColor3 = Color3.fromRGB(120, 140, 125)
     input.Font = Enum.Font.GothamMedium
     input.TextSize = 14
@@ -127,7 +155,7 @@ local function askKey()
     Instance.new("UICorner", input).CornerRadius = UDim.new(0, 8)
     local go = Instance.new("TextButton")
     go.Size = UDim2.new(1, -16, 0, 36)
-    go.Position = UDim2.fromOffset(8, 108)
+    go.Position = UDim2.fromOffset(8, 122)
     go.BackgroundColor3 = Color3.fromRGB(0, 200, 70)
     go.TextColor3 = Color3.fromRGB(8, 12, 9)
     go.Font = Enum.Font.GothamBold
@@ -147,15 +175,10 @@ local function askKey()
         if okCheck then
             done = pass
             gui:Destroy()
+        elseif reason == "USED" then
+            title.Text = "Déjà prise\npar un autre compte"
         else
-            if reason == "USED" then
-                title.Text = "Clé déjà utilisée\nsur un autre compte"
-            elseif reason == "OFF" then
-                title.Text = "Clé désactivée"
-            else
-                title.Text = "Clé refusée"
-            end
-            input.Text = ""
+            title.Text = "Refus: " .. tostring(reason)
         end
     end)
     while not done do
