@@ -39,6 +39,7 @@ end
 
 
 local API_URL = "https://script.google.com/macros/s/AKfycbwAMjtFtCAF0F80-H4YqkPdBdZdPZjGvK3ocr57PCRzXLguV3v49W0z8OQykBE_IA8o4Q/exec"
+local CSV_URL = "https://docs.google.com/spreadsheets/d/12DdlesNLozTDD1OgkcxKpeeJVLzLdufp5fDTGtKWUow/export?format=csv&gid=0"
 local SAVE = "ScottKey.txt"
 
 local function trim(s)
@@ -49,79 +50,61 @@ local function myId()
     return tostring(game:GetService("Players").LocalPlayer.UserId)
 end
 
-local function grab(url)
-    local function clean(s)
-        if type(s) ~= "string" then
-            return nil
-        end
-        s = trim(s)
-        if s == "" or s:find("<html", 1, true) or s:find("<!DOCTYPE", 1, true) then
-            return nil
-        end
-        return s
-    end
+local function getText(url)
     local ok, body = pcall(function()
         return game:HttpGet(url)
     end)
-    body = ok and clean(body)
-    if body then
+    if ok and type(body) == "string" and body ~= "" and not body:find("<html", 1, true) then
         return body
     end
     local req = request or http_request or (syn and syn.request)
     if type(req) == "function" then
         local ok2, res = pcall(req, { Url = url, Method = "GET" })
-        if ok2 and type(res) == "table" then
-            body = clean(res.Body)
-            if body then
-                return body
-            end
-            local headers = res.Headers or res.headers or {}
-            local loc = headers.Location or headers.location
-            if type(loc) == "string" and loc ~= "" then
-                local ok3, body2 = pcall(function()
-                    return game:HttpGet(loc)
-                end)
-                body2 = ok3 and clean(body2)
-                if body2 then
-                    return body2
-                end
-            end
+        if ok2 and type(res) == "table" and type(res.Body) == "string" and res.Body ~= "" then
+            return res.Body
         end
     end
-    if not ok then
-        error(tostring(body))
+    return nil
+end
+
+local function readBind(pass)
+    local body = getText(CSV_URL)
+    if not body then
+        return nil, "PARTAGE"
     end
-    return ""
+    for line in body:gmatch("[^\r\n]+") do
+        local key, status, bound = line:match("^([^,]+),([^,]*),([^,]*)")
+        if key and trim(key) == pass then
+            return trim(bound or ""), trim(status or "")
+        end
+    end
+    return "", "MISSING"
 end
 
 local function keyOk(pass)
-    local url = API_URL .. "?key=" .. game:GetService("HttpService"):UrlEncode(pass) .. "&id=" .. game:GetService("HttpService"):UrlEncode(myId())
-    local last = "SERVEUR"
-    for _ = 1, 3 do
-        local ok, body = pcall(grab, url)
-        if ok and type(body) == "string" then
-            body = trim(body)
-            if body == "OK" or body:find("OK") then
-                return true, "OK"
-            end
-            if body:find("USED") then
-                return false, "USED"
-            end
-            if body:find("OFF") then
-                return false, "OFF"
-            end
-            if body:find("NO") then
-                return false, "NO"
-            end
-            if body ~= "" then
-                last = body:sub(1, 24)
-            end
-        else
-            last = "SERVEUR"
-        end
-        task.wait(0.6)
+    local uid = myId()
+    pcall(function()
+        game:HttpGet(API_URL .. "?key=" .. game:GetService("HttpService"):UrlEncode(pass) .. "&id=" .. uid)
+    end)
+    task.wait(1.2)
+    local bound, status = readBind(pass)
+    if bound == nil then
+        return false, status or "PARTAGE"
     end
-    return false, last
+    if status == "MISSING" then
+        return false, "NO"
+    end
+    if status == "OFF" then
+        return false, "OFF"
+    end
+    bound = bound:match("^(%d+)") or bound
+    if bound == "" then
+        return false, "ATTENDS"
+    end
+    if bound == uid then
+        return true, "OK"
+    end
+    return false, "USED"
 end
 
 local function askKey()
@@ -208,6 +191,8 @@ local function askKey()
             gui:Destroy()
         elseif reason == "USED" then
             title.Text = "Déjà prise\npar un autre compte"
+        elseif reason == "PARTAGE" then
+            title.Text = "Partage le Sheet\nen lecture"
         else
             title.Text = "Refus: " .. tostring(reason)
         end
