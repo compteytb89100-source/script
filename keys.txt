@@ -1,0 +1,7 @@
+# Une ligne = une clé
+# Pour la coller à une seule personne : CLE|USERID
+SCOTT-GHEU-M8ZU|9200515734
+SCOTT-RQFU-72M6
+SCOTT-6ZWR-4J92
+SCOTT-VT9S-FRG8
+SCOTT-Y64Q-BVGA

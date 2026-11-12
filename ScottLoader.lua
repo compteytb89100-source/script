@@ -38,8 +38,7 @@ local function dec(data)
 end
 
 
-local API_URL = "https://script.google.com/macros/s/AKfycbwAMjtFtCAF0F80-H4YqkPdBdZdPZjGvK3ocr57PCRzXLguV3v49W0z8OQykBE_IA8o4Q/exec"
-local CSV_URL = "https://docs.google.com/spreadsheets/d/12DdlesNLozTDD1OgkcxKpeeJVLzLdufp5fDTGtKWUow/export?format=csv&gid=0"
+local KEYS_URL = "https://raw.githubusercontent.com/compteytb89100-source/script/main/keys.txt"
 local SAVE = "ScottKey.txt"
 
 local function trim(s)
@@ -50,61 +49,32 @@ local function myId()
     return tostring(game:GetService("Players").LocalPlayer.UserId)
 end
 
-local function getText(url)
-    local ok, body = pcall(function()
-        return game:HttpGet(url)
-    end)
-    if ok and type(body) == "string" and body ~= "" and not body:find("<html", 1, true) then
-        return body
-    end
-    local req = request or http_request or (syn and syn.request)
-    if type(req) == "function" then
-        local ok2, res = pcall(req, { Url = url, Method = "GET" })
-        if ok2 and type(res) == "table" and type(res.Body) == "string" and res.Body ~= "" then
-            return res.Body
-        end
-    end
-    return nil
-end
-
-local function readBind(pass)
-    local body = getText(CSV_URL)
-    if not body then
-        return nil, "PARTAGE"
-    end
-    for line in body:gmatch("[^\r\n]+") do
-        local key, status, bound = line:match("^([^,]+),([^,]*),([^,]*)")
-        if key and trim(key) == pass then
-            return trim(bound or ""), trim(status or "")
-        end
-    end
-    return "", "MISSING"
-end
-
 local function keyOk(pass)
-    local uid = myId()
-    pcall(function()
-        game:HttpGet(API_URL .. "?key=" .. game:GetService("HttpService"):UrlEncode(pass) .. "&id=" .. uid)
+    local ok, body = pcall(function()
+        return game:HttpGet(KEYS_URL)
     end)
-    task.wait(1.2)
-    local bound, status = readBind(pass)
-    if bound == nil then
-        return false, status or "PARTAGE"
+    if not ok or type(body) ~= "string" or body == "" or body:find("<html", 1, true) or body:find("404", 1, true) then
+        return false, "LISTE"
     end
-    if status == "MISSING" then
-        return false, "NO"
+    local uid = myId()
+    for line in body:gmatch("[^\r\n]+") do
+        local raw = trim(line)
+        if raw ~= "" and raw:sub(1, 1) ~= "#" then
+            local key, lock = raw:match("^(.-)|(.*)$")
+            if not key then
+                key, lock = raw, ""
+            end
+            key = trim(key)
+            lock = trim(lock)
+            if key == pass then
+                if lock == "" or lock == uid then
+                    return true, "ok"
+                end
+                return false, "USED"
+            end
+        end
     end
-    if status == "OFF" then
-        return false, "OFF"
-    end
-    bound = bound:match("^(%d+)") or bound
-    if bound == "" then
-        return false, "ATTENDS"
-    end
-    if bound == uid then
-        return true, "OK"
-    end
-    return false, "USED"
+    return false, "NO"
 end
 
 local function askKey()
@@ -139,24 +109,24 @@ local function askKey()
     gui.DisplayOrder = 100000
     gui.Parent = parent
     local box = Instance.new("Frame")
-    box.Size = UDim2.fromOffset(340, 190)
-    box.Position = UDim2.new(0.5, -170, 0.5, -95)
+    box.Size = UDim2.fromOffset(360, 200)
+    box.Position = UDim2.new(0.5, -180, 0.5, -100)
     box.BackgroundColor3 = Color3.fromRGB(8, 12, 9)
     box.Parent = gui
     Instance.new("UICorner", box).CornerRadius = UDim.new(0, 10)
     local title = Instance.new("TextLabel")
     title.BackgroundTransparency = 1
-    title.Size = UDim2.new(1, -16, 0, 52)
+    title.Size = UDim2.new(1, -16, 0, 58)
     title.Position = UDim2.fromOffset(8, 8)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 15
     title.TextXAlignment = Enum.TextXAlignment.Left
     title.TextColor3 = Color3.fromRGB(225, 255, 230)
-    title.Text = "SCOTT\nID " .. myId()
+    title.Text = "SCOTT\nTon ID: " .. myId()
     title.Parent = box
     local input = Instance.new("TextBox")
     input.Size = UDim2.new(1, -16, 0, 36)
-    input.Position = UDim2.fromOffset(8, 70)
+    input.Position = UDim2.fromOffset(8, 76)
     input.BackgroundColor3 = Color3.fromRGB(13, 18, 14)
     input.TextColor3 = Color3.fromRGB(225, 255, 230)
     input.PlaceholderText = "ta clé"
@@ -169,7 +139,7 @@ local function askKey()
     Instance.new("UICorner", input).CornerRadius = UDim.new(0, 8)
     local go = Instance.new("TextButton")
     go.Size = UDim2.new(1, -16, 0, 36)
-    go.Position = UDim2.fromOffset(8, 122)
+    go.Position = UDim2.fromOffset(8, 128)
     go.BackgroundColor3 = Color3.fromRGB(0, 200, 70)
     go.TextColor3 = Color3.fromRGB(8, 12, 9)
     go.Font = Enum.Font.GothamBold
@@ -190,11 +160,11 @@ local function askKey()
             done = pass
             gui:Destroy()
         elseif reason == "USED" then
-            title.Text = "Déjà prise\npar un autre compte"
-        elseif reason == "PARTAGE" then
-            title.Text = "Partage le Sheet\nen lecture"
+            title.Text = "Clé déjà prise\npar un autre compte"
+        elseif reason == "LISTE" then
+            title.Text = "keys.txt introuvable\npousse le fichier"
         else
-            title.Text = "Refus: " .. tostring(reason)
+            title.Text = "Clé refusée"
         end
     end)
     while not done do
