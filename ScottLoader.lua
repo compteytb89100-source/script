@@ -38,41 +38,70 @@ local function dec(data)
 end
 
 
-local KEYS_URL = "https://raw.githubusercontent.com/compteytb89100-source/script/main/keys.txt"
+local API_URL = "https://script.google.com/macros/s/AKfycbwAMjtFtCAF0F80-H4YqkPdBdZdPZjGvK3ocr57PCRzXLguV3v49W0z8OQykBE_IA8o4Q/exec"
+local CSV_URL = "https://docs.google.com/spreadsheets/d/12DdlesNLozTDD1OgkcxKpeeJVLzLdufp5fDTGtKWUow/gviz/tq?tqx=out:csv&sheet=keys"
 local SAVE = "ScottKey.txt"
 
 local function trim(s)
-    return (tostring(s or "")):gsub("^%s+", ""):gsub("%s+$", ""):gsub("\r", "")
+    return (tostring(s or "")):gsub("^%s+", ""):gsub("%s+$", ""):gsub("\r", ""):gsub('^"', ""):gsub('"$', "")
 end
 
 local function myId()
     return tostring(game:GetService("Players").LocalPlayer.UserId)
 end
 
-local function keyOk(pass)
+local function getText(url)
     local ok, body = pcall(function()
-        return game:HttpGet(KEYS_URL)
+        return game:HttpGet(url)
     end)
-    if not ok or type(body) ~= "string" or body == "" or body:find("<html", 1, true) or body:find("404", 1, true) then
-        return false, "LISTE"
+    if ok and type(body) == "string" and #body > 5 and not body:find("<html", 1, true) then
+        return body
     end
-    local uid = myId()
-    for line in body:gmatch("[^\r\n]+") do
-        local raw = trim(line)
-        if raw ~= "" and raw:sub(1, 1) ~= "#" then
-            local key, lock = raw:match("^(.-)|(.*)$")
-            if not key then
-                key, lock = raw, ""
-            end
-            key = trim(key)
-            lock = trim(lock)
-            if key == pass then
-                if lock == "" or lock == uid then
-                    return true, "ok"
-                end
-                return false, "USED"
-            end
+    return nil
+end
+
+local function field(line, n)
+    local i = 0
+    for part in line:gmatch("([^,]+)") do
+        i += 1
+        if i == n then
+            return trim(part)
         end
+    end
+    return ""
+end
+
+local function keyOk(pass)
+    local uid = myId()
+    pcall(function()
+        game:HttpGet(API_URL .. "?key=" .. game:GetService("HttpService"):UrlEncode(pass) .. "&id=" .. uid)
+    end)
+    task.wait(1.4)
+    local body = getText(CSV_URL)
+    if not body then
+        return false, "PARTAGE"
+    end
+    local found = false
+    for line in body:gmatch("[^\r\n]+") do
+        if line:find(pass, 1, true) then
+            found = true
+            local status = field(line, 2):upper()
+            local bound = field(line, 3)
+            bound = bound:match("%d+") or bound
+            if status == "OFF" then
+                return false, "OFF"
+            end
+            if bound == "" then
+                return false, "ATTENDS"
+            end
+            if bound == uid then
+                return true, "OK"
+            end
+            return false, "USED"
+        end
+    end
+    if not found then
+        return false, "NO"
     end
     return false, "NO"
 end
@@ -160,11 +189,11 @@ local function askKey()
             done = pass
             gui:Destroy()
         elseif reason == "USED" then
-            title.Text = "Clé déjà prise\npar un autre compte"
-        elseif reason == "LISTE" then
-            title.Text = "keys.txt introuvable\npousse le fichier"
+            title.Text = "Déjà utilisée\npar un autre compte"
+        elseif reason == "PARTAGE" then
+            title.Text = "Partage le Sheet\nen lecture"
         else
-            title.Text = "Clé refusée"
+            title.Text = "Refus: " .. tostring(reason)
         end
     end)
     while not done do
