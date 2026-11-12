@@ -1,4 +1,0 @@
-# Une clé par ligne.
-# Pour la verrouiller sur un compte : CLE|USERID
-# Exemple : SCOTT-7K2M-9QX4|123456789
-SCOTT-7K2M-9QX4
